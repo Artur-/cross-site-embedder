@@ -95,6 +95,9 @@ public class CorsFilter implements Filter {
         if ("uidl".equals(request.getParameter("v-r"))) {
             // Vaadin UIDL request
             return true;
+        } else if ("heartbeat".equals(request.getParameter("v-r"))) {
+            // Heartbeats need to go through or the session expires
+            return true;
         } else if (path.startsWith("/build/")) {
             return true;
         }
