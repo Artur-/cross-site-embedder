@@ -5,7 +5,7 @@
 	<groupId>org.vaadin.artur</groupId>
 	<artifactId>cors</artifactId>
 	<packaging>jar</packaging>
-	<version>1.0.0</version>
+	<version>1.0.2</version>
 	<name>Cross Site Embedder</name>
 	<organization>
 		<name>Artur Signell</name>
