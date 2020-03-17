@@ -2,7 +2,9 @@ package org.vaadin.artur.cors;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -17,12 +19,14 @@ import javax.servlet.ServletResponse;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletResponseWrapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @WebFilter(filterName = "Cors Filter", asyncSupported = true, value = "/*")
 public class CorsFilter implements Filter {
+    private static final String SET_COOKIE_HEADER = "Set-Cookie";
     private Set<String> allowedOrigins = new HashSet<>();
 
     @Override
@@ -55,7 +59,30 @@ public class CorsFilter implements Filter {
                 response.addHeader("Vary", "Origin");
             }
         }
+
         chain.doFilter(request, response);
+        rewriteSessionCookieForCrossSite(response);
+    }
+
+    private void rewriteSessionCookieForCrossSite(HttpServletResponse response) {
+        if (response.isCommitted()) {
+            return;
+        }
+        Collection<String> cookieHeaders = response.getHeaders(SET_COOKIE_HEADER);
+
+        // Find "JSESSIONID=abc" without ";SameSite=xyz"
+        Optional<String> sessionIdCookie = cookieHeaders.stream().filter(cookie -> cookie.startsWith("JSESSIONID"))
+                .filter(cookie -> !cookie.toLowerCase().contains("samesite")).findAny();
+        if (!sessionIdCookie.isPresent()) {
+            return;
+        }
+
+        String newSessionCookie = sessionIdCookie.get() + ";SameSite=None";
+        response.setHeader(SET_COOKIE_HEADER, newSessionCookie);
+        getLogger().debug("Changing JSESSIONID to " + newSessionCookie);
+        cookieHeaders.stream().filter(cookie -> !cookie.startsWith("JSESSIONID")).forEach(cookie -> {
+            response.addHeader(SET_COOKIE_HEADER, cookie);
+        });
     }
 
     @Override
