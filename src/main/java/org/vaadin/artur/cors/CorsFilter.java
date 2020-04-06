@@ -19,7 +19,6 @@ import javax.servlet.ServletResponse;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpServletResponseWrapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +40,7 @@ public class CorsFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
         String origin = request.getHeader("Origin");
+        debug("Request for " + request.getRequestURI());
         if (needsCorsHeaders(request) && isAllowedRequestOrigin(origin)) {
             getLogger().debug("CORS request from {} for {}", origin, request.getPathInfo());
             response.addHeader("Access-Control-Allow-Origin", origin);
@@ -60,29 +60,45 @@ public class CorsFilter implements Filter {
             }
         }
 
+        UndertowCookieSupport.handleSessionCookie(response);
         chain.doFilter(request, response);
         rewriteSessionCookieForCrossSite(response);
+
     }
 
     private void rewriteSessionCookieForCrossSite(HttpServletResponse response) {
-        if (response.isCommitted()) {
-            return;
-        }
         Collection<String> cookieHeaders = response.getHeaders(SET_COOKIE_HEADER);
 
         // Find "JSESSIONID=abc" without ";SameSite=xyz"
         Optional<String> sessionIdCookie = cookieHeaders.stream().filter(cookie -> cookie.startsWith("JSESSIONID"))
                 .filter(cookie -> !cookie.toLowerCase().contains("samesite")).findAny();
         if (!sessionIdCookie.isPresent()) {
+            debug("No session cookie found");
+            debug("headers: " + response.getHeaderNames());
             return;
         }
 
-        String newSessionCookie = sessionIdCookie.get() + ";SameSite=None";
+        String newSessionCookie = makeSameSite(sessionIdCookie.get());
         response.setHeader(SET_COOKIE_HEADER, newSessionCookie);
-        getLogger().debug("Changing JSESSIONID to " + newSessionCookie);
+        debug("Changing JSESSIONID to " + newSessionCookie);
+        if (response.isCommitted()) {
+            debug("response is committed");
+            return;
+        }
         cookieHeaders.stream().filter(cookie -> !cookie.startsWith("JSESSIONID")).forEach(cookie -> {
             response.addHeader(SET_COOKIE_HEADER, cookie);
         });
+    }
+
+    private String makeSameSite(String string) {
+        if (string.contains(("SameSite=")))
+            return string;
+
+        return string + ";SameSite=None";
+    }
+
+    static void debug(String string) {
+        getLogger().debug(string);
     }
 
     @Override
@@ -113,8 +129,8 @@ public class CorsFilter implements Filter {
         getLogger().info("Allowing embedding from: " + allowedOrigins.stream().collect(Collectors.joining(", ")));
     }
 
-    private Logger getLogger() {
-        return LoggerFactory.getLogger(getClass());
+    private static Logger getLogger() {
+        return LoggerFactory.getLogger(CorsFilter.class);
     }
 
     private boolean needsCorsHeaders(HttpServletRequest request) {
@@ -132,7 +148,7 @@ public class CorsFilter implements Filter {
     }
 
     private boolean isAllowedRequestOrigin(String origin) {
-        getLogger().debug("Checking if origin is ok: " + origin);
+        debug("Checking if origin is ok: " + origin);
         if (origin == null)
             return false;
         if (allowedOrigins.contains("*")) {
