@@ -134,17 +134,25 @@ public class CorsFilter implements Filter {
     }
 
     private boolean needsCorsHeaders(HttpServletRequest request) {
-        String path = request.getPathInfo();
+        String pathInfo = request.getPathInfo();
+        String servletPath = request.getServletPath();
+        String path = "";
+        if (servletPath != null) {
+            path += servletPath;
+        }
+        if (pathInfo != null) {
+            path += pathInfo;
+        }
+
         if ("uidl".equals(request.getParameter("v-r"))) {
             // Vaadin UIDL request
             return true;
         } else if ("heartbeat".equals(request.getParameter("v-r"))) {
             // Heartbeats need to go through or the session expires
             return true;
-        } else if (path != null) {
-            return path.startsWith("/VAADIN/build/") || path.startsWith("/web-component/");
         }
-        return false;
+
+        return path.startsWith("/VAADIN/build/") || path.startsWith("/web-component/");
     }
 
     private boolean isAllowedRequestOrigin(String origin) {
