@@ -141,8 +141,8 @@ public class CorsFilter implements Filter {
         } else if ("heartbeat".equals(request.getParameter("v-r"))) {
             // Heartbeats need to go through or the session expires
             return true;
-        } else if (path != null && path.startsWith("/VAADIN/build/")) {
-            return true;
+        } else if (path != null) {
+            return path.startsWith("/VAADIN/build/") || path.startsWith("/web-component/");
         }
         return false;
     }
